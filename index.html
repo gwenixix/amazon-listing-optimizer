@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Amazon Listing Optimizer</title>
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --surface: #ffffff;
+    --border: #dfe4ee;
+    --text: #1b2436;
+    --text-muted: #5b6579;
+    --brand: #2a52a3;
+    --brand-dark: #1c3b7a;
+    --brand-light: #e8effb;
+    --ok: #1c7a4d;
+    --ok-bg: #e8f7ee;
+    --warn: #9a6b00;
+    --warn-bg: #fdf3d9;
+    --over: #b3261e;
+    --over-bg: #fbe8e7;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    padding: 0; margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .page { max-width: 1240px; margin: 0 auto; padding: 32px 24px 80px; }
+  .header { margin-bottom: 20px; }
+  .header h1 { font-size: 26px; margin: 0 0 6px; color: var(--brand-dark); }
+  .header p { margin: 0; color: var(--text-muted); font-size: 14.5px; max-width: 760px; line-height: 1.5; }
+
+  .key-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 24px; }
+  .key-row { display: flex; gap: 8px; align-items: center; }
+  .key-row .input { flex: 1; }
+  .key-status { font-size: 12.5px; color: var(--text-muted); margin: 8px 0 0; line-height: 1.5; }
+  .key-status.saved { color: var(--ok); }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .card-title { font-size: 15px; font-weight: 600; margin: 0 0 4px; color: var(--brand-dark); }
+  .card-hint { font-size: 12.5px; color: var(--text-muted); margin: 0 0 14px; line-height: 1.4; }
+
+  .field { margin-bottom: 14px; }
+  .label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+
+  .input, .textarea, select {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px;
+    font-size: 14px; font-family: inherit; background: #fff; color: var(--text);
+  }
+  .textarea { resize: vertical; line-height: 1.45; }
+  .input:focus, .textarea:focus, select:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+  .photo-drop {
+    border: 1.5px dashed var(--border); border-radius: var(--radius); padding: 18px; text-align: center;
+    cursor: pointer; color: var(--text-muted); font-size: 13px; background: #fafbfd; display: block;
+  }
+  .photo-drop:hover { border-color: var(--brand); background: var(--brand-light); }
+  .photo-preview { width: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); background: #fff; }
+
+  .keyword-row { display: grid; grid-template-columns: 1fr 90px 110px 28px; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .keyword-header { display: grid; grid-template-columns: 1fr 90px 110px 28px; gap: 8px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--text-muted); margin-bottom: 6px; }
+  .icon-btn { border: none; background: transparent; color: var(--over); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px; }
+  .add-row-btn { background: none; border: 1px dashed var(--border); border-radius: 8px; color: var(--brand); font-size: 13px; padding: 8px; width: 100%; cursor: pointer; margin-top: 4px; }
+  .add-row-btn:hover { background: var(--brand-light); }
+
+  .btn { border: none; border-radius: 8px; padding: 11px 18px; font-size: 14.5px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: var(--brand); color: #fff; }
+  .btn-primary:hover { background: var(--brand-dark); }
+  .btn-primary:disabled { background: #9fb0cc; cursor: not-allowed; }
+  .btn-secondary { background: #fff; border: 1px solid var(--border); color: var(--text); }
+  .btn-secondary:hover { border-color: var(--brand); color: var(--brand); }
+
+  .generate-row { margin-top: 20px; display: flex; align-items: center; gap: 14px; }
+  .error-banner { background: var(--over-bg); color: var(--over); border: 1px solid #f2c4c1; border-radius: 8px; padding: 10px 14px; font-size: 13.5px; margin-top: 14px; display: none; }
+  .error-banner.visible { display: block; }
+
+  .results { margin-top: 36px; display: none; }
+  .results.visible { display: block; }
+  .section-title { font-size: 18px; font-weight: 700; color: var(--brand-dark); margin: 32px 0 12px; }
+  .analysis-box { background: var(--brand-light); border: 1px solid #cddaf2; border-radius: var(--radius); padding: 16px 18px; font-size: 14px; line-height: 1.55; color: var(--brand-dark); }
+
+  .results-layout { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; align-items: start; margin-top: 12px; }
+  @media (max-width: 1080px) { .results-layout { grid-template-columns: 1fr; } }
+
+  .option-list { display: flex; flex-direction: column; gap: 10px; }
+  .option-card { border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; background: #fff; display: flex; flex-direction: column; gap: 6px; }
+  .option-card:hover { border-color: var(--brand); }
+  .option-card.selected { border-color: var(--brand); background: var(--brand-light); }
+  .option-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .option-text { font-size: 14.5px; font-weight: 600; line-height: 1.4; }
+  .option-rationale { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
+
+  .char-badge { flex-shrink: 0; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .char-badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .char-badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .char-badge.over { background: var(--over-bg); color: var(--over); }
+
+  .bullet-editor { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; background: #fff; }
+  .bullet-editor-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .bullet-editor .input { font-weight: 700; margin-bottom: 6px; }
+
+  .desc-editor { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: #fff; }
+  .desc-editor-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+
+  .preview-panel { position: sticky; top: 20px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .preview-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 14px; }
+  .preview-title { font-size: 20px; font-weight: 700; line-height: 1.3; margin: 0 0 10px; color: var(--text); }
+  .preview-highlights { font-style: italic; color: var(--text-muted); font-size: 13.5px; line-height: 1.5; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .preview-section-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; color: var(--brand); margin-bottom: 8px; letter-spacing: 0.03em; }
+  .preview-new-badge { background: var(--brand); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px; vertical-align: middle; }
+  .preview-description { font-size: 13.5px; line-height: 1.6; margin-bottom: 18px; color: var(--text); }
+  .preview-bullets { margin: 0; padding-left: 18px; }
+  .preview-bullets li { font-size: 13.5px; line-height: 1.55; margin-bottom: 9px; color: var(--text); }
+
+  .copy-btn { background: none; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; padding: 3px 9px; cursor: pointer; color: var(--brand); }
+  .copy-btn:hover { background: var(--brand-light); }
+  .copy-all-row { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.5); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .footer-note { margin-top: 40px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+</style>
+</head>
+<body>
+  <main class="page">
+    <div class="header">
+      <h1>Amazon Listing Optimizer</h1>
+      <p>
+        Built for the July 2026 75-character title policy. Upload a product photo, paste your current title/bullets
+        and hero keywords, and Claude drafts compliant title, Item Highlights, bullet, and description options —
+        you pick and refine. Nothing here is submitted to Amazon automatically. This page calls the Anthropic API
+        directly from your browser using the key below, which is stored only in this browser's local storage.
+      </p>
+    </div>
+
+    <div class="key-card">
+      <label class="label">Anthropic API Key</label>
+      <div class="key-row">
+        <input type="password" id="apiKeyInput" class="input" placeholder="sk-ant-..." autocomplete="off" />
+        <button class="btn btn-secondary" id="toggleKeyVisibility" type="button">Show</button>
+        <button class="btn btn-primary" id="saveKeyBtn" type="button">Save</button>
+      </div>
+      <p class="key-status" id="keyStatus">Not saved yet — your key never leaves this browser except in direct requests to api.anthropic.com.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <p class="card-title">1. Product Photo</p>
+        <p class="card-hint">Optional but recommended — Claude uses it to ground materials, color, and use case.</p>
+        <img id="photoPreview" class="photo-preview" style="display:none" alt="Product preview" />
+        <label class="photo-drop" id="photoDropLabel">
+          Click to upload a photo (JPG/PNG, up to 5MB)
+          <input type="file" id="photoInput" accept="image/*" style="display:none" />
+        </label>
+      </div>
+
+      <div class="card">
+        <p class="card-title">2. Current Listing Copy</p>
+        <p class="card-hint">Paste what's live now so Claude knows what to keep, cut, or improve.</p>
+        <div class="field">
+          <label class="label">Current Title</label>
+          <textarea class="textarea" id="currentTitleInput" rows="3" placeholder="Paste the current product title..."></textarea>
+        </div>
+        <div class="field">
+          <label class="label">Current Bullet Points (one per line)</label>
+          <textarea class="textarea" id="currentBulletsInput" rows="6" placeholder="Bullet 1...&#10;Bullet 2...&#10;Bullet 3..."></textarea>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="card-title">3. Hero Keywords</p>
+        <p class="card-hint">Search volume and relevancy guide what Claude prioritizes in the title vs. Item Highlights.</p>
+        <div class="keyword-header"><span>Keyword</span><span>SV</span><span>Relevancy</span><span></span></div>
+        <div id="keywordRows"></div>
+        <button class="add-row-btn" id="addKeywordBtn" type="button">+ Add keyword</button>
+      </div>
+    </div>
+
+    <div class="generate-row">
+      <button class="btn btn-primary" id="generateBtn" type="button">Generate Listing Copy</button>
+    </div>
+
+    <div class="error-banner" id="errorBanner"></div>
+
+    <div class="results" id="results">
+      <div class="section-title">What to prioritize</div>
+      <div class="analysis-box" id="analysisBox"></div>
+
+      <div class="results-layout">
+        <div>
+          <div class="section-title">Title options (pick one)</div>
+          <div class="option-list" id="titleOptions"></div>
+
+          <div class="section-title">Item Highlights options (pick one)</div>
+          <div class="option-list" id="highlightOptions"></div>
+
+          <div class="section-title">Bullet points (editable)</div>
+          <div id="bulletEditors"></div>
+
+          <div class="section-title">Product description (editable)</div>
+          <div class="desc-editor">
+            <div class="desc-editor-top">
+              <span class="label" style="margin-bottom:0">Description</span>
+              <span class="char-badge ok" id="descriptionBadge">0/1000</span>
+            </div>
+            <textarea class="textarea" id="descriptionInput" rows="8"></textarea>
+          </div>
+        </div>
+
+        <div class="preview-panel">
+          <div class="preview-label">Final Listing Preview</div>
+          <h2 class="preview-title" id="previewTitle"></h2>
+          <p class="preview-highlights" id="previewHighlights"></p>
+          <div class="preview-section-label"><span class="preview-new-badge">NEW</span>Description</div>
+          <p class="preview-description" id="previewDescription"></p>
+          <div class="preview-section-label">Bullets</div>
+          <ul class="preview-bullets" id="previewBullets"></ul>
+          <div class="copy-all-row">
+            <button class="btn btn-secondary" id="copyAllBtn" type="button">Copy All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="footer-note">
+      Review every field against your own keyword data before pasting into Seller Central. Amazon bullet fields are
+      plain text, so the bold headline shown in the preview panel above is for your reference during review, not
+      literal formatting to paste in. Your API key is stored only in this browser (localStorage) and is sent only to
+      api.anthropic.com — never committed to this repo, never sent anywhere else.
+    </p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var TITLE_LIMIT = 75;
+  var HIGHLIGHTS_LIMIT = 125;
+  var BULLET_LIMIT = 250;
+  var DESCRIPTION_LIMIT = 1000;
+  var API_KEY_STORAGE_KEY = "aloApiKey";
+
+  var SYSTEM_PROMPT = [
+    "You are an Amazon SEO listing copywriter working under Amazon's July 2026 title policy. Follow every rule below exactly. Character limits include spaces and are hard limits — count each string yourself before returning it.",
+    "",
+    "TITLE — max 75 characters:",
+    "- Structure: Brand name (must be first word, non-negotiable) + primary keyword/product type + the single most important differentiator (size, material, or key function).",
+    "- Title Case: capitalize each word except articles, conjunctions, and short prepositions.",
+    "- No word repeated more than twice (the brand name counts toward this).",
+    "- No promotional language (\"best\", \"guaranteed\", \"free shipping\", etc.).",
+    "- Use numerals, never spelled-out numbers.",
+    "- No special characters: ! $ ? _ { } ^",
+    "- Must fit in 75 characters including spaces. This is the most common failure mode — recount before finalizing each option.",
+    "",
+    "ITEM HIGHLIGHTS — max 125 characters:",
+    "- Comma-separated phrases, never full sentences.",
+    "- Pattern: [material or key feature], [use case or surface/context], [secondary keyword or compatibility], [differentiator].",
+    "- This is where secondary/long-tail keywords bumped out of the title belong.",
+    "- No promotional language.",
+    "",
+    "BULLET POINTS — exactly 5, each max 250 characters including spaces (headline + body combined):",
+    "- Format each as \"Headline: supporting sentence.\" The headline is a short, punchy phrase (a few words); the body is one or two natural sentences.",
+    "- Write for real shoppers AND for Amazon's Alexa for Shopping AI assistant, which reads bullets to answer natural-language shopper questions. Don't write feature fragments — answer the implicit question a shopper has (what does this do for me, does it solve my problem).",
+    "- Natural, elegant, brand-aligned, customer-focused voice — never keyword-stuffed lists.",
+    "- Weave secondary/tertiary keywords in naturally where they fit the sentence, don't force them.",
+    "",
+    "PRODUCT DESCRIPTION — max 1000 characters including spaces:",
+    "- Natural prose in brand voice. Reinforce primary and secondary keywords without repeating them unnaturally.",
+    "- Address use cases and the problems the product solves — this also feeds Alexa for Shopping's semantic understanding.",
+    "- Use as much of the 1000-character budget as makes sense; don't pad with filler.",
+    "",
+    "KEYWORD PRIORITIZATION:",
+    "- The user supplies hero keywords with estimated search volume (SV) and a relevancy note. Prioritize the highest-SV, highest-relevancy keyword as the PRIMARY keyword and place it near the front of the title.",
+    "- Never drop a keyword entirely. If it doesn't fit the title, place it in Item Highlights or a bullet.",
+    "- If a product photo is provided, use it as visual ground truth for materials, colors, form factor, and use case — don't invent details the photo or text doesn't support.",
+    "- If current title/bullets are provided, preserve any keyword from them that is already ranking-relevant; only drop a keyword if it has no confirmed relevance to this product.",
+    "",
+    "OUTPUT:",
+    "Call the return_listing_copy tool exactly once. Provide:",
+    "- A short analysis (2-4 sentences) explaining what to prioritize and why, based on the keyword data and photo/text context.",
+    "- 5 distinct title options (each must independently satisfy the 75-character rule).",
+    "- 3 distinct Item Highlights options (each must independently satisfy the 125-character rule).",
+    "- 5 bullets (each must independently satisfy the 250-character combined rule).",
+    "- 1 product description (must satisfy the 1000-character rule).",
+    "Double-check every character count against its limit before returning."
+  ].join("\n");
+
+  var TOOL_SCHEMA = {
+    name: "return_listing_copy",
+    description: "Return the generated Amazon listing copy.",
+    input_schema: {
+      type: "object",
+      properties: {
+        analysis: { type: "string", description: "2-4 sentences on which keywords to prioritize and where (title vs. item highlights vs. bullets), and why." },
+        titles: {
+          type: "array", minItems: 5, maxItems: 5,
+          items: {
+            type: "object",
+            properties: {
+              text: { type: "string", description: "The title, 75 characters or fewer including spaces." },
+              rationale: { type: "string", description: "One sentence on this option's angle." }
+            },
+            required: ["text", "rationale"]
+          }
+        },
+        itemHighlights: {
+          type: "array", minItems: 3, maxItems: 3,
+          items: {
+            type: "object",
+            properties: {
+              text: { type: "string", description: "Comma-separated phrases, 125 characters or fewer including spaces." },
+              rationale: { type: "string", description: "One sentence on this option's angle." }
+            },
+            required: ["text", "rationale"]
+          }
+        },
+        bullets: {
+          type: "array", minItems: 5, maxItems: 5,
+          items: {
+            type: "object",
+            properties: {
+              headline: { type: "string", description: "Short bold headline, no trailing colon or punctuation." },
+              body: { type: "string", description: "Supporting sentence(s) in natural, customer-focused voice." }
+            },
+            required: ["headline", "body"]
+          }
+        },
+        description: { type: "string", description: "Product description, 1000 characters or fewer including spaces." }
+      },
+      required: ["analysis", "titles", "itemHighlights", "bullets", "description"]
+    }
+  };
+
+  var state = {
+    imageData: null, // { mediaType, data }
+    keywords: [
+      { keyword: "", searchVolume: "", relevancy: "" },
+      { keyword: "", searchVolume: "", relevancy: "" },
+      { keyword: "", searchVolume: "", relevancy: "" }
+    ],
+    result: null,
+    selectedTitleIdx: 0,
+    selectedHighlightIdx: 0,
+    bullets: [],
+    description: ""
+  };
+
+  var el = {};
+  [
+    "apiKeyInput", "toggleKeyVisibility", "saveKeyBtn", "keyStatus",
+    "photoInput", "photoPreview", "photoDropLabel",
+    "currentTitleInput", "currentBulletsInput",
+    "keywordRows", "addKeywordBtn",
+    "generateBtn", "errorBanner", "results", "analysisBox",
+    "titleOptions", "highlightOptions", "bulletEditors",
+    "descriptionInput", "descriptionBadge",
+    "previewTitle", "previewHighlights", "previewDescription", "previewBullets",
+    "copyAllBtn"
+  ].forEach(function (id) { el[id] = document.getElementById(id); });
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function charBadgeClass(len, limit) {
+    if (len > limit) return "over";
+    if (len > limit * 0.9) return "warn";
+    return "ok";
+  }
+
+  function charBadgeHtml(len, limit) {
+    return '<span class="char-badge ' + charBadgeClass(len, limit) + '">' + len + "/" + limit + "</span>";
+  }
+
+  // --- API key handling ---
+  function loadApiKey() {
+    return window.localStorage.getItem(API_KEY_STORAGE_KEY) || "";
+  }
+
+  function refreshKeyStatus() {
+    var key = loadApiKey();
+    if (key) {
+      el.keyStatus.textContent = "Key saved in this browser (" + key.slice(0, 8) + "…" + key.slice(-4) + ").";
+      el.keyStatus.classList.add("saved");
+    } else {
+      el.keyStatus.textContent = "Not saved yet — your key never leaves this browser except in direct requests to api.anthropic.com.";
+      el.keyStatus.classList.remove("saved");
+    }
+  }
+
+  el.apiKeyInput.value = loadApiKey();
+  refreshKeyStatus();
+
+  el.saveKeyBtn.addEventListener("click", function () {
+    var value = el.apiKeyInput.value.trim();
+    if (value) {
+      window.localStorage.setItem(API_KEY_STORAGE_KEY, value);
+    } else {
+      window.localStorage.removeItem(API_KEY_STORAGE_KEY);
+    }
+    refreshKeyStatus();
+  });
+
+  el.toggleKeyVisibility.addEventListener("click", function () {
+    var showing = el.apiKeyInput.type === "text";
+    el.apiKeyInput.type = showing ? "password" : "text";
+    el.toggleKeyVisibility.textContent = showing ? "Show" : "Hide";
+  });
+
+  // --- Photo upload ---
+  el.photoDropLabel.addEventListener("click", function (e) {
+    // label already forwards clicks to the hidden input; nothing extra needed
+  });
+
+  el.photoInput.addEventListener("change", function () {
+    var file = el.photoInput.files && el.photoInput.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showError("Image is larger than 5MB. Please use a smaller file.");
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var result = reader.result;
+      var match = /^data:(.*);base64,(.*)$/.exec(result);
+      if (!match) return;
+      state.imageData = { mediaType: match[1], data: match[2] };
+      el.photoPreview.src = result;
+      el.photoPreview.style.display = "block";
+      el.photoDropLabel.textContent = file.name + " — click to change";
+      el.photoDropLabel.appendChild(el.photoInput);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // --- Keyword rows ---
+  function renderKeywordRows() {
+    el.keywordRows.innerHTML = state.keywords.map(function (kw, idx) {
+      return (
+        '<div class="keyword-row" data-idx="' + idx + '">' +
+          '<input class="input" data-field="keyword" placeholder="e.g. kitchen roll holder" value="' + escapeHtml(kw.keyword) + '" />' +
+          '<input class="input" data-field="searchVolume" placeholder="2,400" value="' + escapeHtml(kw.searchVolume) + '" />' +
+          '<select data-field="relevancy">' +
+            '<option value="">—</option>' +
+            '<option value="High"' + (kw.relevancy === "High" ? " selected" : "") + '>High</option>' +
+            '<option value="Medium"' + (kw.relevancy === "Medium" ? " selected" : "") + '>Medium</option>' +
+            '<option value="Low"' + (kw.relevancy === "Low" ? " selected" : "") + '>Low</option>' +
+          '</select>' +
+          '<button class="icon-btn" data-action="remove-keyword" type="button" title="Remove row">✕</button>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  el.keywordRows.addEventListener("input", function (e) {
+    var row = e.target.closest(".keyword-row");
+    if (!row) return;
+    var idx = Number(row.dataset.idx);
+    var field = e.target.dataset.field;
+    if (!field) return;
+    state.keywords[idx][field] = e.target.value;
+  });
+
+  el.keywordRows.addEventListener("change", function (e) {
+    var row = e.target.closest(".keyword-row");
+    if (!row) return;
+    var idx = Number(row.dataset.idx);
+    var field = e.target.dataset.field;
+    if (!field) return;
+    state.keywords[idx][field] = e.target.value;
+  });
+
+  el.keywordRows.addEventListener("click", function (e) {
+    var btn = e.target.closest('[data-action="remove-keyword"]');
+    if (!btn) return;
+    var row = btn.closest(".keyword-row");
+    var idx = Number(row.dataset.idx);
+    state.keywords.splice(idx, 1);
+    renderKeywordRows();
+  });
+
+  el.addKeywordBtn.addEventListener("click", function () {
+    state.keywords.push({ keyword: "", searchVolume: "", relevancy: "" });
+    renderKeywordRows();
+  });
+
+  renderKeywordRows();
+
+  // --- Error banner ---
+  function showError(message) {
+    el.errorBanner.textContent = message;
+    el.errorBanner.classList.add("visible");
+  }
+  function clearError() {
+    el.errorBanner.textContent = "";
+    el.errorBanner.classList.remove("visible");
+  }
+
+  // --- Build user text for the prompt ---
+  function buildUserText() {
+    var filledKeywords = state.keywords.filter(function (k) { return k.keyword.trim().length > 0; });
+    var keywordLines = filledKeywords.map(function (k) {
+      return '- "' + k.keyword.trim() + '" — search volume: ' + (k.searchVolume || "unknown") + ", relevancy: " + (k.relevancy || "unknown");
+    }).join("\n");
+
+    var currentTitle = el.currentTitleInput.value.trim();
+    var bulletLines = el.currentBulletsInput.value.split("\n").map(function (b) { return b.trim(); }).filter(Boolean).map(function (b) { return "- " + b; }).join("\n");
+
+    var lines = [];
+    lines.push(currentTitle ? "CURRENT TITLE:\n" + currentTitle : "CURRENT TITLE: (none provided — this is a new listing)");
+    lines.push(bulletLines ? "\nCURRENT BULLET POINTS:\n" + bulletLines : "\nCURRENT BULLET POINTS: (none provided)");
+    lines.push("\nHERO KEYWORDS:\n" + (keywordLines || "(none provided)"));
+    lines.push("\nGenerate the new listing copy per your instructions.");
+    return lines.join("\n");
+  }
+
+  // --- Generate ---
+  function setLoading(loading) {
+    el.generateBtn.disabled = loading;
+    el.generateBtn.innerHTML = loading ? '<span class="spinner"></span>Generating…' : "Generate Listing Copy";
+  }
+
+  el.generateBtn.addEventListener("click", function () {
+    clearError();
+    var apiKey = loadApiKey();
+    if (!apiKey) {
+      showError("Add and save your Anthropic API key above before generating.");
+      return;
+    }
+    var hasKeyword = state.keywords.some(function (k) { return k.keyword.trim().length > 0; });
+    if (!hasKeyword) {
+      showError("Add at least one hero keyword before generating.");
+      return;
+    }
+
+    setLoading(true);
+    el.results.classList.remove("visible");
+
+    var content = [];
+    if (state.imageData) {
+      content.push({
+        type: "image",
+        source: { type: "base64", media_type: state.imageData.mediaType, data: state.imageData.data }
+      });
+    }
+    content.push({ type: "text", text: buildUserText() });
+
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        tools: [TOOL_SCHEMA],
+        tool_choice: { type: "tool", name: "return_listing_copy" },
+        messages: [{ role: "user", content: content }]
+      })
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) {
+            throw new Error((data && data.error && data.error.message) || "Claude API request failed.");
+          }
+          return data;
+        });
+      })
+      .then(function (data) {
+        var toolUse = (data.content || []).filter(function (b) { return b.type === "tool_use"; })[0];
+        if (!toolUse) throw new Error("Claude did not return structured output. Try again.");
+        applyResult(toolUse.input);
+      })
+      .catch(function (err) {
+        showError(err.message || "Something went wrong.");
+      })
+      .then(function () {
+        setLoading(false);
+      });
+  });
+
+  // --- Results rendering ---
+  function applyResult(result) {
+    state.result = result;
+    state.selectedTitleIdx = 0;
+    state.selectedHighlightIdx = 0;
+    state.bullets = result.bullets.map(function (b) { return { headline: b.headline, body: b.body }; });
+    state.description = result.description;
+
+    el.analysisBox.textContent = result.analysis;
+
+    renderOptionList(el.titleOptions, result.titles, TITLE_LIMIT, "title");
+    renderOptionList(el.highlightOptions, result.itemHighlights, HIGHLIGHTS_LIMIT, "highlight");
+    renderBulletEditors();
+
+    el.descriptionInput.value = state.description;
+    updateDescriptionBadge();
+
+    el.results.classList.add("visible");
+    updatePreview();
+  }
+
+  function renderOptionList(container, options, limit, kind) {
+    container.innerHTML = options.map(function (opt, idx) {
+      var selected = kind === "title" ? state.selectedTitleIdx === idx : state.selectedHighlightIdx === idx;
+      return (
+        '<div class="option-card' + (selected ? " selected" : "") + '" data-idx="' + idx + '" data-kind="' + kind + '">' +
+          '<div class="option-top">' +
+            '<span class="option-text">' + escapeHtml(opt.text) + "</span>" +
+            charBadgeHtml(opt.text.length, limit) +
+          "</div>" +
+          '<span class="option-rationale">' + escapeHtml(opt.rationale) + "</span>" +
+        "</div>"
+      );
+    }).join("");
+  }
+
+  el.titleOptions.addEventListener("click", function (e) {
+    var card = e.target.closest(".option-card");
+    if (!card) return;
+    state.selectedTitleIdx = Number(card.dataset.idx);
+    el.titleOptions.querySelectorAll(".option-card").forEach(function (c, i) {
+      c.classList.toggle("selected", i === state.selectedTitleIdx);
+    });
+    updatePreview();
+  });
+
+  el.highlightOptions.addEventListener("click", function (e) {
+    var card = e.target.closest(".option-card");
+    if (!card) return;
+    state.selectedHighlightIdx = Number(card.dataset.idx);
+    el.highlightOptions.querySelectorAll(".option-card").forEach(function (c, i) {
+      c.classList.toggle("selected", i === state.selectedHighlightIdx);
+    });
+    updatePreview();
+  });
+
+  function renderBulletEditors() {
+    el.bulletEditors.innerHTML = state.bullets.map(function (b, idx) {
+      var combinedLen = b.headline.length + 2 + b.body.length;
+      return (
+        '<div class="bullet-editor" data-idx="' + idx + '">' +
+          '<div class="bullet-editor-top">' +
+            '<span class="label" style="margin-bottom:0">Bullet ' + (idx + 1) + "</span>" +
+            '<span class="char-badge ' + charBadgeClass(combinedLen, BULLET_LIMIT) + '" data-role="bullet-badge">' + combinedLen + "/" + BULLET_LIMIT + "</span>" +
+          "</div>" +
+          '<input class="input" data-field="headline" value="' + escapeHtml(b.headline) + '" />' +
+          '<textarea class="textarea" data-field="body" rows="2">' + escapeHtml(b.body) + "</textarea>" +
+        "</div>"
+      );
+    }).join("");
+  }
+
+  el.bulletEditors.addEventListener("input", function (e) {
+    var editor = e.target.closest(".bullet-editor");
+    if (!editor) return;
+    var idx = Number(editor.dataset.idx);
+    var field = e.target.dataset.field;
+    if (!field) return;
+    state.bullets[idx][field] = e.target.value;
+
+    var b = state.bullets[idx];
+    var combinedLen = b.headline.length + 2 + b.body.length;
+    var badge = editor.querySelector('[data-role="bullet-badge"]');
+    badge.className = "char-badge " + charBadgeClass(combinedLen, BULLET_LIMIT);
+    badge.textContent = combinedLen + "/" + BULLET_LIMIT;
+
+    updatePreview();
+  });
+
+  function updateDescriptionBadge() {
+    var len = state.description.length;
+    el.descriptionBadge.className = "char-badge " + charBadgeClass(len, DESCRIPTION_LIMIT);
+    el.descriptionBadge.textContent = len + "/" + DESCRIPTION_LIMIT;
+  }
+
+  el.descriptionInput.addEventListener("input", function () {
+    state.description = el.descriptionInput.value;
+    updateDescriptionBadge();
+    updatePreview();
+  });
+
+  function selectedTitleText() {
+    if (!state.result) return "";
+    var opt = state.result.titles[state.selectedTitleIdx];
+    return opt ? opt.text : "";
+  }
+
+  function selectedHighlightsText() {
+    if (!state.result) return "";
+    var opt = state.result.itemHighlights[state.selectedHighlightIdx];
+    return opt ? opt.text : "";
+  }
+
+  function updatePreview() {
+    el.previewTitle.textContent = selectedTitleText();
+    el.previewHighlights.textContent = selectedHighlightsText();
+    el.previewDescription.textContent = state.description;
+    el.previewBullets.innerHTML = state.bullets.map(function (b) {
+      return "<li><strong>" + escapeHtml(b.headline) + "</strong>: " + escapeHtml(b.body) + "</li>";
+    }).join("");
+  }
+
+  function buildCopyAllText() {
+    var bulletLines = state.bullets.map(function (b) { return b.headline + ": " + b.body; }).join("\n");
+    return (
+      "TITLE:\n" + selectedTitleText() +
+      "\n\nITEM HIGHLIGHTS:\n" + selectedHighlightsText() +
+      "\n\nBULLET POINTS:\n" + bulletLines +
+      "\n\nDESCRIPTION:\n" + state.description
+    );
+  }
+
+  el.copyAllBtn.addEventListener("click", function () {
+    if (!state.result) return;
+    navigator.clipboard.writeText(buildCopyAllText()).catch(function () {});
+  });
+})();
+</script>
+</body>
+</html>
