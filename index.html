@@ -130,7 +130,8 @@
 
   .copy-btn { background: none; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; padding: 3px 9px; cursor: pointer; color: var(--brand); }
   .copy-btn:hover { background: var(--brand-light); }
-  .copy-all-row { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .copy-all-row { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; }
+  .explain-box { margin-top: 14px; background: var(--brand-light); border: 1px solid #cddaf2; border-radius: var(--radius); padding: 14px 16px; font-size: 13.5px; line-height: 1.6; color: var(--brand-dark); white-space: pre-wrap; }
 
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.5); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 8px; vertical-align: middle; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -242,7 +243,9 @@
           <ul class="preview-bullets" id="previewBullets"></ul>
           <div class="copy-all-row">
             <button class="btn btn-secondary" id="copyAllBtn" type="button">Copy All</button>
+            <button class="btn btn-secondary" id="explainBtn" type="button">Explain in Plain English</button>
           </div>
+          <div class="explain-box" id="explainBox" style="display:none"></div>
         </div>
       </div>
     </div>
@@ -266,7 +269,11 @@
   var API_KEY_STORAGE_KEY = "aloApiKey";
 
   var SYSTEM_PROMPT = [
-    "You are an Amazon SEO listing copywriter working under Amazon's July 2026 title policy. Follow every rule below exactly. Character limits include spaces and are hard limits — count each string yourself before returning it.",
+    "You are an Amazon SEO listing copywriter working under Amazon's July 2026 title policy. Follow every rule below exactly. Character limits include spaces and are hard limits: count each string yourself before returning it.",
+    "",
+    "GLOBAL STYLE RULES (apply to every field you return):",
+    "- Never use an em dash or en dash anywhere, in any field. Write natural, conversational, native-sounding prose using periods, commas, and \"and\"/\"so\"/\"which\" instead of dashes.",
+    "- Read every sentence back and make sure it sounds like something a person would actually say, not like keywords stitched together.",
     "",
     "TITLE — max 75 characters:",
     "- Structure: Brand name (must be first word, non-negotiable) + primary keyword/product type + the single most important differentiator (size, material, or key function).",
@@ -284,10 +291,11 @@
     "- No promotional language.",
     "",
     "BULLET POINTS — exactly 5, each max 250 characters including spaces (headline + body combined):",
-    "- Format each as \"Headline: supporting sentence.\" The headline is a short, punchy phrase (a few words); the body is one or two natural sentences.",
-    "- Write for real shoppers AND for Amazon's Alexa for Shopping AI assistant, which reads bullets to answer natural-language shopper questions. Don't write feature fragments — answer the implicit question a shopper has (what does this do for me, does it solve my problem).",
-    "- Natural, elegant, brand-aligned, customer-focused voice — never keyword-stuffed lists.",
+    "- Format each as \"HEADLINE: supporting sentence.\" The headline (the words before the colon) must be in ALL CAPS, a short punchy phrase of a few words; the body after the colon is normal sentence case, one or two natural sentences.",
+    "- Write for real shoppers AND for Amazon's Alexa for Shopping AI assistant, which reads bullets to answer natural-language shopper questions. Don't write feature fragments, answer the implicit question a shopper has (what does this do for me, does it solve my problem).",
+    "- Natural, elegant, brand-aligned, customer-focused voice, never a keyword-stuffed list.",
     "- Weave secondary/tertiary keywords in naturally where they fit the sentence, don't force them.",
+    "- Each of the 5 bullets must cover a distinct purpose or angle (for example: one core benefit, one material/durability, one ease of use or installation, one compatibility/fit, one use case or occasion). Do not repeat the same feature, claim, or phrase across two bullets, and do not let two bullets make essentially the same point in different words.",
     "",
     "PRODUCT DESCRIPTION — max 1000 characters including spaces:",
     "- Natural prose in brand voice. Reinforce primary and secondary keywords without repeating them unnaturally.",
@@ -398,7 +406,7 @@
     "titleOptions", "highlightOptions", "bulletEditors",
     "descriptionInput", "descriptionBadge",
     "previewTitle", "previewHighlights", "previewDescription", "previewBullets",
-    "copyAllBtn"
+    "copyAllBtn", "explainBtn", "explainBox"
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   function escapeHtml(str) {
@@ -686,11 +694,60 @@
   });
 
   // --- Results rendering ---
+
+  // Safety net: the model is instructed to stay under every limit and never use dashes,
+  // but enforce both here too so a slip-up never reaches the user unfixed.
+  function stripDashes(text) {
+    return String(text)
+      .replace(/\s*[—–]\s*/g, ", ")
+      .replace(/[—–]/g, ",")
+      .replace(/,\s*,/g, ",")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function truncateToLimit(text, limit) {
+    var str = String(text);
+    if (str.length <= limit) return str;
+    var truncated = str.slice(0, limit);
+    var lastSpace = truncated.lastIndexOf(" ");
+    if (lastSpace > 0) truncated = truncated.slice(0, lastSpace);
+    return truncated.replace(/[\s,.;:]+$/, "");
+  }
+
+  function cleanCopyText(text, limit) {
+    return truncateToLimit(stripDashes(text), limit);
+  }
+
+  function sanitizeBullet(b) {
+    var headline = stripDashes(b.headline).toUpperCase().trim();
+    var body = stripDashes(b.body).trim();
+    var combined = headline.length + 2 + body.length;
+    if (combined > BULLET_LIMIT) {
+      var budget = BULLET_LIMIT - headline.length - 2;
+      if (budget < 10) {
+        headline = truncateToLimit(headline, BULLET_LIMIT);
+        body = "";
+      } else {
+        body = truncateToLimit(body, budget);
+      }
+    }
+    return { headline: headline, body: body };
+  }
+
   function applyResult(result) {
+    result.titles = result.titles.map(function (t) {
+      return { text: cleanCopyText(t.text, TITLE_LIMIT), rationale: stripDashes(t.rationale) };
+    });
+    result.itemHighlights = result.itemHighlights.map(function (h) {
+      return { text: cleanCopyText(h.text, HIGHLIGHTS_LIMIT), rationale: stripDashes(h.rationale) };
+    });
+    result.description = cleanCopyText(result.description, DESCRIPTION_LIMIT);
+
     state.result = result;
     state.selectedTitleIdx = 0;
     state.selectedHighlightIdx = 0;
-    state.bullets = result.bullets.map(function (b) { return { headline: b.headline, body: b.body }; });
+    state.bullets = result.bullets.map(sanitizeBullet);
     state.description = result.description;
 
     el.analysisBox.textContent = result.analysis;
@@ -781,6 +838,12 @@
     var idx = Number(editor.dataset.idx);
     var field = e.target.dataset.field;
     if (!field) return;
+
+    if (field === "headline") {
+      var pos = e.target.selectionStart;
+      e.target.value = e.target.value.toUpperCase();
+      e.target.setSelectionRange(pos, pos);
+    }
     state.bullets[idx][field] = e.target.value;
 
     var b = state.bullets[idx];
@@ -842,6 +905,74 @@
   el.copyAllBtn.addEventListener("click", function () {
     if (!state.result) return;
     navigator.clipboard.writeText(buildCopyAllText()).catch(function () {});
+  });
+
+  var EXPLAIN_SYSTEM_PROMPT = [
+    "You are helping a seller sanity-check Amazon listing copy before it goes live.",
+    "Read the title, item highlights, bullets, and description exactly as given below.",
+    "In plain, simple English, explain back what a shopper would understand this product to be, what it does, and what's included, as if paraphrasing it out loud to a friend who cannot see the original text.",
+    "Then, on a new line starting with \"Flags:\", call out anything that sounds unclear, contradictory, robotic, keyword-stuffed, or repetitive between bullets. If nothing stands out, write \"Flags: none, this reads clearly.\"",
+    "Do not rewrite or improve the copy. Only explain and flag."
+  ].join("\n");
+
+  function buildExplainUserText() {
+    var bulletLines = state.bullets.map(function (b) { return b.headline + ": " + b.body; }).join("\n");
+    return (
+      "TITLE:\n" + selectedTitleText() +
+      "\n\nITEM HIGHLIGHTS:\n" + selectedHighlightsText() +
+      "\n\nBULLET POINTS:\n" + bulletLines +
+      "\n\nDESCRIPTION:\n" + state.description
+    );
+  }
+
+  el.explainBtn.addEventListener("click", function () {
+    if (!state.result) return;
+    var apiKey = loadApiKey();
+    if (!apiKey) {
+      showError("Add and save your Anthropic API key above before generating.");
+      return;
+    }
+
+    el.explainBtn.disabled = true;
+    el.explainBtn.innerHTML = '<span class="spinner"></span>Explaining…';
+    el.explainBox.style.display = "block";
+    el.explainBox.textContent = "Reading through the copy…";
+
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 1024,
+        system: EXPLAIN_SYSTEM_PROMPT,
+        output_config: { effort: "low" },
+        messages: [{ role: "user", content: [{ type: "text", text: buildExplainUserText() }] }]
+      })
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) {
+            throw new Error((data && data.error && data.error.message) || "Claude API request failed.");
+          }
+          return data;
+        });
+      })
+      .then(function (data) {
+        var textBlock = (data.content || []).filter(function (b) { return b.type === "text"; })[0];
+        el.explainBox.textContent = textBlock ? textBlock.text : "Claude didn't return an explanation. Try again.";
+      })
+      .catch(function (err) {
+        el.explainBox.textContent = "Error: " + (err.message || "Something went wrong.");
+      })
+      .then(function () {
+        el.explainBtn.disabled = false;
+        el.explainBtn.textContent = "Explain in Plain English";
+      });
   });
 })();
 </script>
