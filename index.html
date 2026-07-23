@@ -102,6 +102,15 @@
   .char-badge.warn { background: var(--warn-bg); color: var(--warn); }
   .char-badge.over { background: var(--over-bg); color: var(--over); }
 
+  .placement-table { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 18px; margin-bottom: 8px; }
+  .placement-row { display: flex; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .placement-row:last-child { border-bottom: none; }
+  .placement-keyword { font-weight: 600; font-size: 13.5px; min-width: 160px; }
+  .placement-badge { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; text-transform: capitalize; white-space: nowrap; }
+  .placement-badge.placed { background: var(--ok-bg); color: var(--ok); }
+  .placement-badge.dropped { background: var(--over-bg); color: var(--over); }
+  .placement-note { font-size: 12.5px; color: var(--text-muted); flex: 1; min-width: 200px; }
+
   .bullet-editor { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; background: #fff; }
   .bullet-editor-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
   .bullet-editor .input { font-weight: 700; margin-bottom: 6px; }
@@ -199,6 +208,9 @@
       <div class="section-title">What to prioritize</div>
       <div class="analysis-box" id="analysisBox"></div>
 
+      <div class="section-title">Keyword placement</div>
+      <div class="placement-table" id="keywordPlacementTable"></div>
+
       <div class="results-layout">
         <div>
           <div class="section-title">Title options (pick one)</div>
@@ -288,6 +300,11 @@
     "- If a product photo is provided, use it as visual ground truth for materials, colors, form factor, and use case — don't invent details the photo or text doesn't support.",
     "- If current title/bullets are provided, preserve any keyword from them that is already ranking-relevant; only drop a keyword if it has no confirmed relevance to this product.",
     "",
+    "KEYWORD PLACEMENT REPORT:",
+    "- For every hero keyword the user supplied, report exactly where it ended up: \"title\", \"item highlights\", \"bullets\", \"description\", or \"dropped\". A keyword can land in more than one place — report its primary placement.",
+    "- Dropping a keyword entirely is a last resort. Only mark a keyword \"dropped\" if it has no confirmed relevance to this product (e.g. it describes a different product type or feature this item doesn't have) — never drop a keyword just because the title or highlights ran out of room.",
+    "- Give one short reason per keyword: why it went where it went, or why it was dropped.",
+    "",
     "OUTPUT:",
     "Call the return_listing_copy tool exactly once. Provide:",
     "- A short analysis (2-4 sentences) explaining what to prioritize and why, based on the keyword data and photo/text context.",
@@ -295,6 +312,7 @@
     "- 3 distinct Item Highlights options (each must independently satisfy the 125-character rule).",
     "- 5 bullets (each must independently satisfy the 250-character combined rule).",
     "- 1 product description (must satisfy the 1000-character rule).",
+    "- A keyword placement report covering every hero keyword supplied, per the rules above.",
     "Double-check every character count against its limit before returning."
   ].join("\n");
 
@@ -338,9 +356,21 @@
             required: ["headline", "body"]
           }
         },
-        description: { type: "string", description: "Product description, 1000 characters or fewer including spaces." }
+        description: { type: "string", description: "Product description, 1000 characters or fewer including spaces." },
+        keywordPlacement: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              keyword: { type: "string", description: "The hero keyword as supplied by the user." },
+              placement: { type: "string", enum: ["title", "item highlights", "bullets", "description", "dropped"], description: "Where this keyword primarily ended up." },
+              note: { type: "string", description: "One short sentence: why it went there, or why it was dropped." }
+            },
+            required: ["keyword", "placement", "note"]
+          }
+        }
       },
-      required: ["analysis", "titles", "itemHighlights", "bullets", "description"]
+      required: ["analysis", "titles", "itemHighlights", "bullets", "description", "keywordPlacement"]
     }
   };
 
@@ -364,7 +394,7 @@
     "photoInput", "photoPreview", "photoDropLabel",
     "currentTitleInput", "currentBulletsInput",
     "keywordRows", "addKeywordBtn", "bulkKeywordInput", "bulkKeywordParseBtn",
-    "generateBtn", "errorBanner", "results", "analysisBox",
+    "generateBtn", "errorBanner", "results", "analysisBox", "keywordPlacementTable",
     "titleOptions", "highlightOptions", "bulletEditors",
     "descriptionInput", "descriptionBadge",
     "previewTitle", "previewHighlights", "previewDescription", "previewBullets",
@@ -628,6 +658,7 @@
         model: "claude-sonnet-5",
         max_tokens: 4096,
         system: SYSTEM_PROMPT,
+        output_config: { effort: "low" },
         tools: [TOOL_SCHEMA],
         tool_choice: { type: "tool", name: "return_listing_copy" },
         messages: [{ role: "user", content: content }]
@@ -663,6 +694,7 @@
     state.description = result.description;
 
     el.analysisBox.textContent = result.analysis;
+    renderKeywordPlacement(result.keywordPlacement || []);
 
     renderOptionList(el.titleOptions, result.titles, TITLE_LIMIT, "title");
     renderOptionList(el.highlightOptions, result.itemHighlights, HIGHLIGHTS_LIMIT, "highlight");
@@ -673,6 +705,23 @@
 
     el.results.classList.add("visible");
     updatePreview();
+  }
+
+  function renderKeywordPlacement(rows) {
+    if (!rows.length) {
+      el.keywordPlacementTable.innerHTML = "";
+      return;
+    }
+    el.keywordPlacementTable.innerHTML = rows.map(function (row) {
+      var dropped = row.placement === "dropped";
+      return (
+        '<div class="placement-row">' +
+          '<span class="placement-keyword">' + escapeHtml(row.keyword) + "</span>" +
+          '<span class="placement-badge ' + (dropped ? "dropped" : "placed") + '">' + escapeHtml(row.placement) + "</span>" +
+          '<span class="placement-note">' + escapeHtml(row.note) + "</span>" +
+        "</div>"
+      );
+    }).join("");
   }
 
   function renderOptionList(container, options, limit, kind) {
@@ -778,11 +827,15 @@
 
   function buildCopyAllText() {
     var bulletLines = state.bullets.map(function (b) { return b.headline + ": " + b.body; }).join("\n");
+    var placementLines = ((state.result && state.result.keywordPlacement) || [])
+      .map(function (row) { return "- " + row.keyword + " → " + row.placement + " (" + row.note + ")"; })
+      .join("\n");
     return (
       "TITLE:\n" + selectedTitleText() +
       "\n\nITEM HIGHLIGHTS:\n" + selectedHighlightsText() +
       "\n\nBULLET POINTS:\n" + bulletLines +
-      "\n\nDESCRIPTION:\n" + state.description
+      "\n\nDESCRIPTION:\n" + state.description +
+      (placementLines ? "\n\nKEYWORD PLACEMENT:\n" + placementLines : "")
     );
   }
 
