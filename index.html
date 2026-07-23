@@ -67,6 +67,8 @@
   .icon-btn { border: none; background: transparent; color: var(--over); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px; }
   .add-row-btn { background: none; border: 1px dashed var(--border); border-radius: 8px; color: var(--brand); font-size: 13px; padding: 8px; width: 100%; cursor: pointer; margin-top: 4px; }
   .add-row-btn:hover { background: var(--brand-light); }
+  .bulk-paste-block { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); }
+  .bulk-paste-block textarea { font-size: 13px; margin-bottom: 8px; }
 
   .btn { border: none; border-radius: 8px; padding: 11px 18px; font-size: 14.5px; font-weight: 600; cursor: pointer; }
   .btn-primary { background: var(--brand); color: #fff; }
@@ -179,6 +181,11 @@
         <div class="keyword-header"><span>Keyword</span><span>SV</span><span>Relevancy</span><span></span></div>
         <div id="keywordRows"></div>
         <button class="add-row-btn" id="addKeywordBtn" type="button">+ Add keyword</button>
+        <div class="bulk-paste-block">
+          <label class="label" style="margin-top:14px">Or paste rows from a spreadsheet / Data Dive</label>
+          <textarea class="textarea" id="bulkKeywordInput" rows="3" placeholder="Select and copy cells from Google Sheets, Excel, or Data Dive, then paste here — keyword, search volume, relevancy per row. Rows above will be replaced."></textarea>
+          <button class="add-row-btn" id="bulkKeywordParseBtn" type="button">Fill rows from pasted data</button>
+        </div>
       </div>
     </div>
 
@@ -356,7 +363,7 @@
     "apiKeyInput", "toggleKeyVisibility", "saveKeyBtn", "keyStatus",
     "photoInput", "photoPreview", "photoDropLabel",
     "currentTitleInput", "currentBulletsInput",
-    "keywordRows", "addKeywordBtn",
+    "keywordRows", "addKeywordBtn", "bulkKeywordInput", "bulkKeywordParseBtn",
     "generateBtn", "errorBanner", "results", "analysisBox",
     "titleOptions", "highlightOptions", "bulletEditors",
     "descriptionInput", "descriptionBadge",
@@ -450,12 +457,7 @@
         '<div class="keyword-row" data-idx="' + idx + '">' +
           '<input class="input" data-field="keyword" placeholder="e.g. kitchen roll holder" value="' + escapeHtml(kw.keyword) + '" />' +
           '<input class="input" data-field="searchVolume" placeholder="2,400" value="' + escapeHtml(kw.searchVolume) + '" />' +
-          '<select data-field="relevancy">' +
-            '<option value="">—</option>' +
-            '<option value="High"' + (kw.relevancy === "High" ? " selected" : "") + '>High</option>' +
-            '<option value="Medium"' + (kw.relevancy === "Medium" ? " selected" : "") + '>Medium</option>' +
-            '<option value="Low"' + (kw.relevancy === "Low" ? " selected" : "") + '>Low</option>' +
-          '</select>' +
+          '<input class="input" data-field="relevancy" placeholder="High / 8.5" value="' + escapeHtml(kw.relevancy) + '" />' +
           '<button class="icon-btn" data-action="remove-keyword" type="button" title="Remove row">✕</button>' +
         '</div>'
       );
@@ -463,15 +465,6 @@
   }
 
   el.keywordRows.addEventListener("input", function (e) {
-    var row = e.target.closest(".keyword-row");
-    if (!row) return;
-    var idx = Number(row.dataset.idx);
-    var field = e.target.dataset.field;
-    if (!field) return;
-    state.keywords[idx][field] = e.target.value;
-  });
-
-  el.keywordRows.addEventListener("change", function (e) {
     var row = e.target.closest(".keyword-row");
     if (!row) return;
     var idx = Number(row.dataset.idx);
@@ -492,6 +485,74 @@
   el.addKeywordBtn.addEventListener("click", function () {
     state.keywords.push({ keyword: "", searchVolume: "", relevancy: "" });
     renderKeywordRows();
+  });
+
+  // Splits pasted spreadsheet/Data Dive rows into {keyword, searchVolume, relevancy} objects.
+  // Handles tab-separated (Excel/Sheets copy), comma-separated (CSV), or single-column keyword lists,
+  // and drops a leading header row if one is detected.
+  function parseKeywordRows(text) {
+    var lines = text.split(/\r\n|\n|\r/).map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
+    if (!lines.length) return [];
+
+    var rows = lines.map(function (line) {
+      var cells;
+      if (line.indexOf("\t") !== -1) cells = line.split("\t");
+      else if (line.indexOf(",") !== -1) cells = line.split(",");
+      else cells = [line];
+      return cells.map(function (c) { return c.trim(); });
+    });
+
+    if (rows.length > 1) {
+      var headerWords = ["keyword", "search volume", "sv", "relevancy", "relevance"];
+      var firstRowJoined = rows[0].join(" ").toLowerCase();
+      var looksLikeHeader = headerWords.some(function (w) { return firstRowJoined.indexOf(w) !== -1; });
+      if (looksLikeHeader) rows.shift();
+    }
+
+    return rows
+      .map(function (cells) {
+        return { keyword: cells[0] || "", searchVolume: cells[1] || "", relevancy: cells[2] || "" };
+      })
+      .filter(function (r) { return r.keyword.length > 0; });
+  }
+
+  function fillKeywordsFromText(text) {
+    var parsed = parseKeywordRows(text);
+    if (!parsed.length) {
+      showError("Could not find any keyword rows in that pasted data.");
+      return;
+    }
+    state.keywords = parsed;
+    renderKeywordRows();
+    clearError();
+  }
+
+  el.bulkKeywordInput.addEventListener("paste", function (e) {
+    var text = (e.clipboardData || window.clipboardData).getData("text");
+    if (!text || (text.indexOf("\t") === -1 && text.indexOf("\n") === -1 && text.indexOf(",") === -1)) return;
+    e.preventDefault();
+    fillKeywordsFromText(text);
+    el.bulkKeywordInput.value = "";
+  });
+
+  el.bulkKeywordParseBtn.addEventListener("click", function () {
+    if (!el.bulkKeywordInput.value.trim()) {
+      showError("Paste your keyword data into the box first.");
+      return;
+    }
+    fillKeywordsFromText(el.bulkKeywordInput.value);
+    el.bulkKeywordInput.value = "";
+  });
+
+  // Pasting a multi-row/column block directly into a single keyword cell (e.g. from Excel) also
+  // expands into the full table, so you don't have to use the dedicated paste box.
+  el.keywordRows.addEventListener("paste", function (e) {
+    var input = e.target.closest('input[data-field="keyword"]');
+    if (!input) return;
+    var text = (e.clipboardData || window.clipboardData).getData("text");
+    if (!text || (text.indexOf("\t") === -1 && text.indexOf("\n") === -1)) return;
+    e.preventDefault();
+    fillKeywordsFromText(text);
   });
 
   renderKeywordRows();
